@@ -1,0 +1,150 @@
+{
+ "_about": "Model catalog for the Models screen. Add an entry here to offer a new model. role: chat | gen | edit. engine: ollama (pulled into models/ by the private server) | mflux-flux2 (downloaded from Hugging Face and saved 8-bit into models/<dir>). mem_gb is the peak memory while it works.",
+ "models": [
+  {
+   "id": "chat-qwen35-9b",
+   "role": "chat",
+   "engine": "ollama",
+   "tag": "huihui_ai/qwen3.5-abliterated:9b-q4_K",
+   "name": "Qwen3.5 9B abliterated",
+   "size_gb": 6.6,
+   "mem_gb": 7,
+   "license": "Apache 2.0",
+   "vision": true,
+   "notes": "Fast and light. Good interviews, sometimes misses details.",
+   "use_he": "הכי מהיר וקל. לבקשות פשוטות.",
+   "use_en": "Fastest and lightest. For simple requests."
+  },
+  {
+   "id": "chat-qwen35-27b",
+   "role": "chat",
+   "engine": "ollama",
+   "tag": "huihui_ai/qwen3.5-abliterated:27b-q4_K",
+   "name": "Qwen3.5 27B abliterated",
+   "size_gb": 17,
+   "mem_gb": 18,
+   "license": "Apache 2.0",
+   "vision": true,
+   "notes": "Recommended. Much smarter prompts, still fits next to normal work.",
+   "use_he": "מומלץ. הכי חכם בהבנת הבקשה ובכתיבת הפרומפט.",
+   "use_en": "Recommended. Best at understanding the request and writing the prompt."
+  },
+  {
+   "id": "chat-qwen35-35b-a3b",
+   "role": "chat",
+   "engine": "ollama",
+   "tag": "huihui_ai/qwen3.5-abliterated:35b-a3b-q4_K",
+   "name": "Qwen3.5 35B-A3B abliterated (MoE)",
+   "size_gb": 24,
+   "mem_gb": 25,
+   "license": "Apache 2.0",
+   "vision": true,
+   "notes": "Very fast replies, more memory, a bit less precise than 27B.",
+   "use_he": "תשובות מהירות מאוד, צורך יותר זיכרון.",
+   "use_en": "Very fast replies, uses more memory."
+  },
+  {
+   "id": "gen-zimage-fp8",
+   "role": "gen",
+   "engine": "ollama",
+   "tag": "x/z-image-turbo:fp8",
+   "name": "Z-Image Turbo (fp8)",
+   "size_gb": 13,
+   "mem_gb": 14,
+   "license": "Apache 2.0",
+   "notes": "Recommended default. Tested 2026-10-26: most natural people and age, 43 s per image. Weak at text inside the image.",
+   "use_he": "מומלץ. אנשים ופנים מציאותיים, מהיר (כ-43 שנ').",
+   "use_en": "Recommended. Realistic people and faces, fast (about 43 s)."
+  },
+  {
+   "id": "gen-flux2-klein-4b",
+   "role": "gen",
+   "engine": "ollama",
+   "tag": "x/flux2-klein:4b",
+   "name": "FLUX.2 klein 4B (Ollama)",
+   "size_gb": 5.7,
+   "mem_gb": 7,
+   "license": "Apache 2.0",
+   "notes": "Lighter and faster, a bit less realistic.",
+   "use_he": "מהיר וקל, פחות מציאותי.",
+   "use_en": "Fast and light, less realistic."
+  },
+  {
+   "id": "gen-flux2-klein-9b",
+   "role": "gen",
+   "engine": "ollama",
+   "tag": "x/flux2-klein:9b",
+   "name": "FLUX.2 klein 9B (Ollama)",
+   "size_gb": 12,
+   "mem_gb": 14,
+   "license": "FLUX Non-Commercial",
+   "notes": "Strong detail and text, non-commercial.",
+   "use_he": "פרטים וטקסט בתוך התמונה, בינוני בזיכרון.",
+   "use_en": "Detail and text inside the image, medium memory."
+  },
+  {
+   "id": "gen-flux2-klein-9b-fp8",
+   "role": "gen",
+   "engine": "ollama",
+   "tag": "x/flux2-klein:9b-fp8",
+   "name": "FLUX.2 klein 9B (Ollama, fp8)",
+   "size_gb": 20,
+   "mem_gb": 22,
+   "license": "FLUX Non-Commercial",
+   "notes": "Tested 2026-10-26: best for text inside the image (perfect plaque text). People look older and slightly less natural than Z-Image, 72 s per image vs 43 s. Non-commercial.",
+   "use_he": "הכי טוב לטקסט בתוך התמונה (שלט, כרזה, לוגו). איטי יותר.",
+   "use_en": "Best for text inside the image (sign, poster, logo). Slower."
+  },
+  {
+   "id": "edit-flux2-klein-4b",
+   "role": "edit",
+   "engine": "mflux-flux2",
+   "base": "flux2-klein-4b",
+   "dir": "models/flux2-klein-4b-q8",
+   "name": "FLUX.2 klein 4B (8-bit)",
+   "size_gb": 8,
+   "mem_gb": 6,
+   "download_gb": 15,
+   "license": "Apache 2.0",
+   "gated": false,
+   "notes": "Light. Face score about 0.90 when editing in place, about 0.5 in new scenes.",
+   "use_he": "כשמצרפים תמונה: שמירת פנים, החלפת בגדים או רקע.",
+   "use_en": "When you attach a photo: keep the face, change clothes or background."
+  }
+ ],
+ "_disabled": {
+  "_why": "2026-10-26: operator chose Ollama only - no Hugging Face login. Move an entry back into models to offer it again.",
+  "models": [
+   {
+    "id": "edit-flux2-klein-9b",
+    "role": "edit",
+    "engine": "mflux-flux2",
+    "base": "flux2-klein-9b",
+    "dir": "models/flux2-klein-9b-q8",
+    "name": "FLUX.2 klein 9B (8-bit)",
+    "size_gb": 18,
+    "mem_gb": 18,
+    "download_gb": 32,
+    "license": "FLUX Non-Commercial",
+    "gated": true,
+    "hf_page": "https://huggingface.co/black-forest-labs/FLUX.2-klein-9B",
+    "notes": "Recommended upgrade. Stronger identity and detail. Needs a Hugging Face login once."
+   },
+   {
+    "id": "edit-flux2-klein-9b-kv",
+    "role": "edit",
+    "engine": "mflux-flux2",
+    "base": "flux2-klein-9b-kv",
+    "dir": "models/flux2-klein-9b-kv-q8",
+    "name": "FLUX.2 klein 9B KV (8-bit)",
+    "size_gb": 18,
+    "mem_gb": 18,
+    "download_gb": 32,
+    "license": "FLUX Non-Commercial",
+    "gated": true,
+    "hf_page": "https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-kv",
+    "notes": "9B tuned for faster editing with reference photos."
+   }
+  ]
+ }
+}

@@ -1,0 +1,26 @@
+# Model weights (tens of GB) - re-created by 'img-on' and scripts/setup-edit.sh
+models/*
+!models/.gitkeep
+# Private images - never commit faces or reference photos
+outputs/*
+!outputs/.gitkeep
+refs/*
+!refs/.gitkeep
+# Runtime state
+run/*
+!run/.gitkeep
+logs/*
+!logs/.gitkeep
+# Python env and caches
+.venv/
+.uv-cache/
+__pycache__/
+*.pyc
+.ruff_cache/
+.DS_Store
+# Pinned Ollama binary and its download
+vendor/
+# History database (prompts, jobs, chats) - private, local only
+data/
+# Personal, machine-only additions (never shared)
+local/

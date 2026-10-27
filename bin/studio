@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+# local-image-studio - on / off / status / gen for a private Ollama image server.
+# The server runs only between 'on' and 'off'. It never touches Ollama.app.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=../config/studio.env
+source "$ROOT/config/studio.env"
+
+# A launcher can point every file this script writes at another place
+STUDIO_PORT="${STUDIO_PORT_OVERRIDE:-$STUDIO_PORT}"
+PORTAL_PORT="${PORTAL_PORT_OVERRIDE:-$PORTAL_PORT}"
+RUN_DIR="${STUDIO_RUN_DIR:-$ROOT/run}"
+OUT_DIR="${STUDIO_OUT_DIR:-$ROOT/outputs}"
+LOG_DIR="${STUDIO_LOG_DIR:-$ROOT/logs}"
+# Per-tab model choice from the portal (no config change)
+STUDIO_MODEL="${STUDIO_MODEL_OVERRIDE:-$STUDIO_MODEL}"
+EDIT_BASE_MODEL="${EDIT_BASE_MODEL_OVERRIDE:-$EDIT_BASE_MODEL}"
+EDIT_MODEL_PATH="${EDIT_MODEL_PATH_OVERRIDE:-$EDIT_MODEL_PATH}"
+
+PID_FILE="$RUN_DIR/server.pid"
+PORTAL_PID="$RUN_DIR/portal.pid"
+PORTAL_TOKEN="$RUN_DIR/portal.token"
+PORTAL_URL="http://$STUDIO_HOST:$PORTAL_PORT"
+LOG_FILE="$LOG_DIR/server.log"
+URL="http://$STUDIO_HOST:$STUDIO_PORT"
+OLLAMA_BIN="$ROOT/$STUDIO_OLLAMA_BIN"
+
+die() { echo "studio: $*" >&2; exit 1; }
+up() { curl -fsS -m 2 "$URL/api/version" >/dev/null 2>&1; }
+
+server_pid() {
+  [[ -f "$PID_FILE" ]] || return 1
+  local pid; pid="$(cat "$PID_FILE")"
+  # Only trust the pid if it is still our 'ollama serve'
+  ps -o command= -p "$pid" 2>/dev/null | grep -q "ollama serve" || return 1
+  echo "$pid"
+}
+
+portal_pid() {
+  [[ -f "$PORTAL_PID" ]] || return 1
+  local pid; pid="$(cat "$PORTAL_PID")"
+  ps -o command= -p "$pid" 2>/dev/null | grep -q "bin/portal.py" || return 1
+  echo "$pid"
+}
+portal_up() { curl -s -o /dev/null -m 2 "$PORTAL_URL/" 2>/dev/null; }
+
+portal_start() {
+  portal_pid >/dev/null && { echo "studio: portal already on"; return; }
+  lsof -nP -iTCP:"$PORTAL_PORT" -sTCP:LISTEN >/dev/null 2>&1 && die "port $PORTAL_PORT is used by another process"
+  # New random token on every start; only the opened link carries it
+  (umask 077; "$ROOT/.venv/bin/python" -c 'import secrets;print(secrets.token_urlsafe(32))' >"$PORTAL_TOKEN")
+  nohup "$ROOT/.venv/bin/python" -I "$ROOT/bin/portal.py" >>"$ROOT/logs/portal.log" 2>&1 &
+  echo $! >"$PORTAL_PID"
+  for _ in $(seq 1 20); do portal_up && break; sleep 0.25; done
+  portal_up || die "portal did not start, see $ROOT/logs/portal.log"
+  echo "studio: portal on ($PORTAL_URL)"
+}
+
+portal_open() {
+  portal_pid >/dev/null || die "portal is off - run img-on"
+  open "$PORTAL_URL/?t=$(cat "$PORTAL_TOKEN")"
+}
+
+# Warn (never block) when free memory is low - e.g. Ollama.app still holds big models
+mem_check() {
+  local need="${1:-0}" pct total free
+  pct=$(memory_pressure -Q 2>/dev/null | awk -F': ' '/free percentage/ {gsub("%","",$2); print $2}')
+  total=$(( $(sysctl -n hw.memsize) / 1073741824 ))
+  free=$(( ${pct:-100} * total / 100 ))
+  if (( free < need )); then
+    echo "studio: warning - about ${free} GB free, this step needs about ${need} GB."
+    curl -fsS -m 2 http://127.0.0.1:11434/api/ps 2>/dev/null | jq -r '.models[]? | "studio:   Ollama.app holds \(.name) (\(.size/1e9|floor) GB)"' || true
+  fi
+}
+
+# Run the ollama CLI against the private server only
+ocli() { OLLAMA_HOST="$STUDIO_HOST:$STUDIO_PORT" "$OLLAMA_BIN" "$@"; }
+
+# Free memory: unload every model the private server holds
+unload_all() {
+  local m
+  for m in $(curl -fsS -m 5 "$URL/api/ps" 2>/dev/null | jq -r '.models[].name' 2>/dev/null); do
+    curl -fsS -m 10 "$URL/api/generate" -d "{\"model\":\"$m\",\"keep_alive\":0}" >/dev/null 2>&1 || true
+  done
+}
+
+cmd_on() {
+  server_up_or_start
+  [[ "${1:-}" == "--no-portal" ]] && return
+  portal_start
+  portal_open
+}
+
+server_up_or_start() {
+  if server_pid >/dev/null && up; then echo "studio: server already on ($URL)"; return; fi
+  [[ -x "$OLLAMA_BIN" ]] || die "pinned ollama missing: $OLLAMA_BIN - run scripts/setup-ollama.sh"
+  lsof -nP -iTCP:"$STUDIO_PORT" -sTCP:LISTEN >/dev/null 2>&1 && die "port $STUDIO_PORT is used by another process"
+
+  # Clean env: drop every inherited OLLAMA_* (the main app uses KEEP_ALIVE=-1)
+  local -a clean=()
+  while IFS='=' read -r k _; do [[ "$k" == OLLAMA_* ]] && clean+=(-u "$k"); done < <(env)
+  env "${clean[@]}" \
+    OLLAMA_HOST="$STUDIO_HOST:$STUDIO_PORT" \
+    OLLAMA_MODELS="$ROOT/models" \
+    OLLAMA_KEEP_ALIVE="$STUDIO_KEEP_ALIVE" \
+    OLLAMA_MAX_LOADED_MODELS=1 \
+    OLLAMA_NUM_PARALLEL=1 \
+    OLLAMA_NOHISTORY=1 \
+    nohup "$OLLAMA_BIN" serve >>"$LOG_FILE" 2>&1 &
+  echo $! >"$PID_FILE"
+
+  for _ in $(seq 1 40); do up && break; sleep 0.5; done
+  up || die "server did not start, see $LOG_FILE"
+  echo "studio: server on ($URL)"
+
+  local m
+  for m in "$STUDIO_MODEL" "$CHAT_MODEL"; do
+    if ! ocli show "$m" >/dev/null 2>&1; then
+      echo "studio: first run - downloading $m into $ROOT/models"
+      ocli pull "$m"
+    fi
+  done
+}
+
+cmd_off() {
+  local pid
+  if pid="$(portal_pid)"; then
+    kill "$pid" 2>/dev/null || true
+    for _ in $(seq 1 10); do kill -0 "$pid" 2>/dev/null || break; sleep 0.3; done
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+  # An edit still running (bin/edit_batch.py of this folder only, never another copy)
+  pkill -f "$ROOT/bin/edit_batch.py" 2>/dev/null || true
+  pkill -f "$ROOT/.venv/bin/$EDIT_CMD" 2>/dev/null || true
+  rm -f "$PORTAL_PID" "$PORTAL_TOKEN" "$ROOT"/run/view-*.jpg
+  if pid="$(server_pid)"; then
+    up && unload_all
+    local kids; kids="$(pgrep -P "$pid" || true)"
+    kill "$pid" 2>/dev/null || true
+    for _ in $(seq 1 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+    kill -9 "$pid" $kids 2>/dev/null || true
+  fi
+  rm -f "$PID_FILE" "$ROOT"/run/llm-*.jpg  # temp photo copies the chat model looked at
+  up && die "something still answers on $URL"
+  portal_up && die "something still answers on $PORTAL_URL"
+  echo "studio: off - server, portal and models stopped, no memory used"
+  echo "studio: to use it again run: img-on"
+  # From a terminal: show the offline start page (the portal page switches by itself)
+  [[ -t 1 && "${STUDIO_NO_LAUNCHER:-0}" != "1" ]] && open "$ROOT/portal/launcher.html" || true
+}
+
+cmd_status() {
+  local pid
+  if pid="$(server_pid)" && up; then
+    echo "studio: ON  pid=$pid  $URL"
+    portal_pid >/dev/null && echo "portal: ON  $PORTAL_URL  (img-portal opens it)" || echo "portal: OFF"
+    curl -fsS -m 2 "$URL/api/ps" | jq -r '.models[] | "loaded: \(.name)  \(.size/1e9|floor) GB  until \(.expires_at)"'
+  else
+    echo "studio: OFF"
+  fi
+}
+
+usage_gen() {
+  cat <<EOF
+usage: studio gen "prompt" [-W width] [-H height] [-s steps] [-S seed] [-n name]
+EOF
+}
+
+cmd_gen() {
+  [[ $# -ge 1 ]] || { usage_gen; exit 1; }
+  local prompt="$1"; shift
+  local w="$STUDIO_WIDTH" h="$STUDIO_HEIGHT" steps="$STUDIO_STEPS" seed="" name=""
+  while getopts "W:H:s:S:n:" o; do
+    case "$o" in W) w="$OPTARG";; H) h="$OPTARG";; s) steps="$OPTARG";; S) seed="$OPTARG";; n) name="$OPTARG";; *) usage_gen; exit 1;; esac
+  done
+  server_pid >/dev/null && up || die "studio is off - run img-on first"
+
+  [[ -n "$seed" ]] || seed=$((RANDOM * 32768 + RANDOM))
+  [[ -n "$name" ]] || name="$(echo "$prompt" | tr -cs '[:alnum:]' '-' | cut -c1-40 | sed 's/-*$//')"
+  local out="$OUT_DIR/$(date +%Y%m%d-%H%M%S)-${name}.png"
+
+  local body
+  body="$(jq -n --arg m "$STUDIO_MODEL" --arg p "$prompt" --arg ka "$GEN_KEEP_ALIVE" \
+    --argjson w "$w" --argjson h "$h" --argjson s "$steps" --argjson seed "$seed" \
+    '{model:$m, prompt:$p, stream:false, keep_alive:$ka, width:$w, height:$h, steps:$s, options:{seed:$seed}}')"
+
+  # Model swap: the chat model leaves memory before the image model loads
+  curl -fsS -m 5 "$URL/api/ps" | jq -e --arg m "$STUDIO_MODEL" '[.models[].name] | index($m)' >/dev/null 2>&1 || { unload_all; mem_check "$GEN_MEM_GB"; }
+  echo "studio: generating ${w}x${h}, ${steps} steps, seed $seed ..."
+  local t0=$SECONDS
+  # Keep Ollama's own error text (no curl -f), and retry once: a model that is still
+  # loading or leaving memory can fail the first request
+  local resp err="" try
+  for try in 1 2; do
+    resp="$(curl -sS -m 900 "$URL/api/generate" -d "$body" 2>&1)" || true
+    if jq -er '.image' <<<"$resp" 2>/dev/null | base64 -d >"$out" 2>/dev/null && [[ -s "$out" ]]; then
+      err=""; break
+    fi
+    rm -f "$out"
+    err="$(jq -r '.error // empty' <<<"$resp" 2>/dev/null)"; err="${err:-${resp:0:200}}"; err="${err:-no answer from the server}"
+    if [[ $try == 1 ]]; then echo "studio: first try failed ($err) - retrying"; unload_all; sleep 2; fi
+  done
+  [[ -z "$err" ]] || die "generation failed: $err"
+  echo "studio: saved $out ($((SECONDS - t0))s)"
+  [[ "${STUDIO_OPEN:-1}" == "1" ]] && open "$out" || true
+}
+
+usage_edit() {
+  cat <<EOF
+usage: studio edit "prompt" ref.jpg [ref2.jpg ...] [-W width] [-H height] [-s steps] [-S seed] [-n name]
+EOF
+}
+
+cmd_edit() {
+  [[ $# -ge 2 ]] || { usage_edit; exit 1; }
+  local prompt="$1"; shift
+  local -a refs=()
+  while [[ $# -gt 0 && "$1" != -* ]]; do
+    [[ -f "$1" ]] || die "reference image not found: $1"
+    refs+=("$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"); shift
+  done
+  [[ ${#refs[@]} -ge 1 ]] || { usage_edit; exit 1; }
+  local w="" h="" steps="$EDIT_STEPS" seed="" name=""
+  while getopts "W:H:s:S:n:" o; do
+    case "$o" in W) w="$OPTARG";; H) h="$OPTARG";; s) steps="$OPTARG";; S) seed="$OPTARG";; n) name="$OPTARG";; *) usage_edit; exit 1;; esac
+  done
+  server_pid >/dev/null && up || die "studio is off - run img-on first"
+  [[ -d "$ROOT/$EDIT_MODEL_PATH" ]] || die "edit model missing - run scripts/setup-edit.sh"
+
+  # -S takes one seed or a comma list (1,2,3): all variations share ONE model load
+  [[ -n "$seed" ]] || seed=$((RANDOM * 32768 + RANDOM))
+  [[ -n "$name" ]] || name="edit-$(echo "$prompt" | tr -cs '[:alnum:]' '-' | cut -c1-35 | sed 's/-*$//')"
+  local prefix="$OUT_DIR/$(date +%Y%m%d-%H%M%S)-${name}"
+
+  local -a extra=()
+  [[ -n "$w" && -n "$h" ]] && extra+=(--width "$w" --height "$h")
+  [[ -n "${EDIT_LORA:-}" ]] && extra+=(--lora $EDIT_LORA)
+
+  # Model swap: free every Ollama model first, so only the edit model uses memory
+  unload_all
+  mem_check "$EDIT_MEM_GB"
+
+  echo "studio: editing with ${#refs[@]} reference image(s), ${steps} steps, seeds $seed ..."
+  HF_HOME="$ROOT/models/hf" HF_HUB_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 \
+    "$ROOT/.venv/bin/python" -I "$ROOT/bin/edit_batch.py" \
+      --model-path "$ROOT/$EDIT_MODEL_PATH" --base-model "$EDIT_BASE_MODEL" \
+      --refs "${refs[@]}" --prompt "$prompt" --steps "$steps" --seeds "$seed" \
+      --out-prefix "$prefix" "${extra[@]}" 2>>"$LOG_DIR/edit.log" \
+    | tee -a "$LOG_DIR/edit.log" | grep --line-buffered "^studio:" || true
+  ls "$prefix"-v*.png >/dev/null 2>&1 || die "edit failed, see $LOG_DIR/edit.log"
+  [[ "${STUDIO_OPEN:-1}" == "1" ]] && open "$prefix"-v*.png || true
+}
+
+cmd_chat() {
+  server_pid >/dev/null && up || server_up_or_start
+  STUDIO_URL="$URL" CHAT_MODEL="$CHAT_MODEL" STUDIO_KEEP_ALIVE="$STUDIO_KEEP_ALIVE" \
+    "$ROOT/.venv/bin/python" -I "$ROOT/bin/chat.py"
+}
+
+cmd_home() {
+  local b=$'\033[1m' o=$'\033[0m'
+  echo "${b}local-image-studio${o}  $ROOT"
+  cmd_status
+  cat <<EOF
+
+${b}Where things are${o}
+  Project        $ROOT
+  Settings       $ROOT/config/studio.env
+  Interview      $ROOT/prompts/interviewer.md
+  Your photos    $ROOT/refs/
+  Results        $ROOT/outputs/      chat logs: outputs/sessions/
+  Models         $ROOT/models/       ($(du -sh "$ROOT/models" 2>/dev/null | cut -f1))
+  Server log     $ROOT/logs/server.log    edit log: logs/edit.log
+  Best practice  $ROOT/docs/face-best-practice.md
+
+${b}Models${o}
+  Chat           $CHAT_MODEL
+  Text to image  $STUDIO_MODEL   (Ollama $STUDIO_OLLAMA_VERSION, $URL)
+  Photo edit     $EDIT_BASE_MODEL 8-bit (mflux)   $ROOT/$EDIT_MODEL_PATH
+
+${b}Commands${o}
+  img-on         start everything and open the web portal
+  img-portal     open the portal again (new tab)
+  img            this screen, then the terminal interview chat
+  img-chat       the interview chat only
+  img-gen "prompt" [-W -H -s -S -n]
+  img-edit "prompt" ref1.jpg [ref2.jpg ...] [-W -H -s -S -n]
+  img-status     img-out (open results)     img-off (stop everything)
+EOF
+  [[ "${1:-}" == "--no-chat" ]] && return
+  echo
+  read -r -p "${b}Start the interview chat? [Y/n] ${o}" ans
+  [[ -z "$ans" || "$ans" =~ ^[Yy] ]] && cmd_chat || true
+}
+
+case "${1:-}" in
+  "") cmd_home ;;
+  home) shift; cmd_home "$@" ;;
+  chat) cmd_chat ;;
+  on) shift; cmd_on "$@" ;;
+  portal) portal_open ;;
+  launcher) open "$ROOT/portal/launcher.html" ;;
+  off) cmd_off ;;
+  status) cmd_status ;;
+  gen) shift; cmd_gen "$@" ;;
+  edit) shift; cmd_edit "$@" ;;
+  *) echo "usage: studio [home|chat|on [--no-portal]|portal|off|status|gen|edit]"; exit 1 ;;
+esac
