@@ -91,7 +91,7 @@ TIFF, GIF, BMP and AVIF are saved as JPEG so the models can read them. Max 40 MB
 - **System**: status, memory, paths, Free all memory, Turn off.
 - **Help**: Examples first (use cases with real results - new image, text in image, clothes edit,
   new scene, face swap, iterations, settings, prompt builder; `docs/examples.md`, images in
-  `docs/examples/`), then Quick start, where everything is (the repo tree) and all guides.
+  `docs/examples/`), then Quick start, Responsible use, where everything is (the repo tree) and all guides.
 
 Language: English by default, Hebrew with the **EN | עב** switch in the top bar. All UI text lives in
 `portal/i18n/en.json` and `he.json`; run `python3 scripts/check-i18n.py` after any UI text change

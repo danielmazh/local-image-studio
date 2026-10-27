@@ -2210,7 +2210,7 @@ const DOCS = () => [["README.md", t("help.doc.readme")], ["docs/models.md", t("n
   ["prompts/interviewer.md", t("sys.interview")]];
 async function loadHelp() {
   try { await getHelp(); } catch (e) { $("hbody").innerHTML = `<p class="desc">${esc(t("help.loadFailed", { msg: e.message }))}</p>`; }
-  const pages = [["examples", t("help.examples")], ["quick", t("help.quick")], ["where", t("help.where")]].concat(DOCS().filter(([f]) => helpData && helpData.docs[f]));
+  const pages = [["examples", t("help.examples")], ["quick", t("help.quick")], ["resp", t("help.resp")], ["where", t("help.where")]].concat(DOCS().filter(([f]) => helpData && helpData.docs[f]));
   $("hmenu").replaceChildren(...pages.map(([id, label]) => {
     const b = document.createElement("button"); b.textContent = label; b.classList.toggle("on", id === helpPage);
     b.onclick = () => { helpPage = id; loadHelp(); }; return b;
@@ -2229,6 +2229,9 @@ async function loadHelp() {
         <li>${t("help.q5")}</li>
         <li>${t("help.q6")}</li>
       </ol>`;
+  } else if (helpPage === "resp") {
+    // help.resp* values hold a little trusted markup (<b>) from our own JSON files
+    body.innerHTML = `<h2>${esc(t("help.resp"))}</h2><p>${t("help.resp1")}</p><p>${t("help.resp2")}</p>`;
   } else if (helpPage === "where") {
     body.innerHTML = `<h2>${esc(t("help.where"))}</h2><p>${esc(t("help.projectFolder"))} <code>${esc(helpData ? helpData.root : "")}</code></p><div class="tree" id="tree"></div>`;
     if (helpData) $("tree").innerHTML = treeHtml(helpData.files || [], helpData.local_only || []);
