@@ -44,6 +44,8 @@ More results (text in images, clothes edit, face swap, iterations): [docs/exampl
 
 If this is useful to you, a star helps other people find it.
 
+Use it responsibly: you alone are responsible for what you make with it. See [Responsible use and disclaimer](#responsible-use-and-disclaimer).
+
 ## Quick start
 
 First time? See [Install on a new machine](#install-on-a-new-machine). Then:
@@ -195,11 +197,19 @@ each one keeps its own license. Check the model card before any commercial use.
 | Qwen3.5 abliterated (huihui_ai) | see the model card (base: Qwen license) |
 | InsightFace code / `buffalo_l` face model | MIT / non-commercial research only |
 
-## Responsible use
+## Responsible use and disclaimer
 
 This tool can change faces and make realistic images of people. Use photos only of people who
 agreed. Do not make images that deceive, harass, sexualize real people or break the law where you
-live. You are responsible for what you make with it.
+live.
+
+**You alone are responsible for everything you make with it.** The studio runs only on your own
+machine, under your control. The author does not run it, see it, store it or review it, and
+has no part in any prompt, photo or image you create, use or share. The author is not liable for
+any content made with this software, for how it is used, or for any harm, claim or loss that
+comes from it. By installing or using it you accept this, and you agree to follow the law and the
+license of every model you download. The software comes "as is", without warranty of any kind
+(see [LICENSE](LICENSE)).
 
 ## License
 
