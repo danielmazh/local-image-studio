@@ -1,10 +1,52 @@
+<div align="center">
+
 # local-image-studio
 
-A private image studio on this Mac (Apple M5 Pro, 48 GB). You talk to a director (a local
-language model). After you approve, it runs the image models itself, looks at the results and
-leads the next round. Everything runs locally and only while it is on.
+**Your own AI image studio. On your Mac. Nothing leaves it.**
+
+Talk to a local art director, approve the prompt, get the image.
+No cloud, no account, no per-image cost, no upload of your photos.
+
+![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-black?logo=apple)
+![100% local](https://img.shields.io/badge/runs-100%25%20local-2ea44f)
+![Ollama](https://img.shields.io/badge/Ollama-0.32.5-blue)
+![MLX](https://img.shields.io/badge/mflux-Apple%20MLX-orange)
+![EN | HE](https://img.shields.io/badge/UI-English%20%7C%20Hebrew-lightgrey)
+![License MIT](https://img.shields.io/badge/license-MIT-green)
+
+![Studio: one sentence in, a finished image out](docs/screenshots/studio.jpg)
+
+</div>
+
+## Why
+
+- **Private by design.** Models, photos and results stay on your disk. The servers listen on
+  `127.0.0.1` only.
+- **A director, not a text box.** A local language model asks what matters, writes the prompt,
+  runs the image model, looks at the result and leads the next round.
+- **Edit with your own photos.** Change clothes, swap a background, put a person in a new scene.
+  A face match score (ArcFace) checks that the person still looks like the person.
+- **Zero cost when idle.** `img-on` starts it, `img-off` frees all of its memory. Only one model
+  is in memory at a time, so it fits next to normal work on a 32-48 GB Mac.
+
+> Small insight from building it: the image model is not the hard part. The prompt is.
+> A local model that interviews you for 10 seconds beats a long prompt you write yourself.
+
+## A look inside
+
+| Prompt Builder: one ready prompt, then **Send to Studio** | Live thinking: see how the model reasons |
+| --- | --- |
+| ![Prompt Builder](docs/screenshots/pb.jpg) | ![Live thinking](docs/screenshots/pb-think.jpg) |
+| **Models**: install, switch and free memory with one click | **Full Hebrew UI** with right-to-left layout |
+| ![Models](docs/screenshots/models.jpg) | ![Hebrew UI](docs/screenshots/studio-he.jpg) |
+
+More results (text in images, clothes edit, face swap, iterations): [docs/examples.md](docs/examples.md).
+
+If this is useful to you, a star helps other people find it.
 
 ## Quick start
+
+First time? See [Install on a new machine](#install-on-a-new-machine). Then:
 
 ```bash
 img-on      # start server + portal, the portal opens in the browser
@@ -108,7 +150,7 @@ config/models.json    the model catalog shown on the Models screen
 prompts/interviewer.md  the director's instructions (shared by portal, terminal, Claude skill)
 prompts/prompt-builder.md  the Prompt Builder role
 shell/aliases.zsh     the img-* aliases (sourced from ~/.zshrc)
-docs/                 models guide, face best practice, examples (EN and HE)
+docs/                 models guide, face best practice, examples (EN and HE), screenshots
 scripts/              install.sh, setup-ollama.sh, setup-edit.sh, check-i18n.py
 pyproject.toml, uv.lock  Python packages (mflux, face score), pinned
 .claude/skills/image-prompt  the same interview inside Claude Code
