@@ -137,3 +137,28 @@ The clone can live in any folder.
 ## Notes
 
 - Pillow is pinned below 13: Pillow 13 fails to import on Homebrew Python 3.13.
+
+## Third-party software and models
+
+This repo ships no model weights and no third-party binaries. The installer downloads them, and
+each one keeps its own license. Check the model card before any commercial use.
+
+| Component | License |
+| --- | --- |
+| Ollama 0.32.5 | MIT |
+| mflux | MIT |
+| Z-Image Turbo (`x/z-image-turbo`) | Apache 2.0 |
+| FLUX.2 klein 4B (edit) | Apache 2.0 |
+| FLUX.2 klein 9B (`x/flux2-klein:9b`) | FLUX Non-Commercial License |
+| Qwen3.5 abliterated (huihui_ai) | see the model card (base: Qwen license) |
+| InsightFace code / `buffalo_l` face model | MIT / non-commercial research only |
+
+## Responsible use
+
+This tool can change faces and make realistic images of people. Use photos only of people who
+agreed. Do not make images that deceive, harass, sexualize real people or break the law where you
+live. You are responsible for what you make with it.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Copyright (c) 2026 danielmazh.
